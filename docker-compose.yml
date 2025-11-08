@@ -1,0 +1,171 @@
+version: "3"
+services:
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - 6881:6881
+      - 6881:6881/udp
+      - 8080:8080 # qbittorrent
+      # - 9117:9117 # Jackett
+      # - 8989:8989 # Sonarr
+      # - 7878:7878 # Radarr
+      # - 5055:5055 # Overseerr
+      # - 6767:6767 # Bazarr
+      # - 8191:8191 # FlareSolvarr
+      # - 9696:9696 # Prowlarr
+      # - 32444:32400 # Plex
+    volumes:
+      - ${GLUETUN_VOLUME}:/gluetun
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=${VPN_TYPE}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - TZ=${TZ}
+      - UPDATER_PERIOD=${UPDATER_PERIOD}
+      - UPDATER_VPN_SERVICE_PROVIDERS=${UPDATER_VPN_SERVICE_PROVIDERS}
+      - SERVER_REGIONS=${SERVER_REGIONS}
+      - SERVER_CATEGORIES=${SERVER_CATEGORIES}
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=${WEBUI_PORT}
+      - UMASK=022
+    healthcheck: # https://github.com/qdm12/gluetun/issues/641#issuecomment-933856220
+      test: "curl -sf https://1.1.1.1/  || exit 1"
+      interval: 1m
+      timeout: 10s
+      retries: 1
+    volumes:
+      - ${QBITTORRENT_CONFIG_VOLUME}:/config
+      - ${QBITTORRENT_DOWNLOADS_VOLUME}:/data/torrents
+    restart: always
+
+  # jackett:
+  #   image: lscr.io/linuxserver/jackett
+  #   container_name: jackett
+  #   # network_mode: "service:gluetun"
+  #   network_mode: "bridge" # outside of the VPN 
+  #   environment:
+  #     - PUID=${PUID}
+  #     - PGID=${PGID}
+  #     - TZ=${TZ}
+  #     - AUTO_UPDATE=${AUTO_UPDATE}
+  #   volumes:
+  #     - ${JACKETT_VOLUME}:/config
+  #     - ${QBITTORRENT_DOWNLOADS_VOLUME}:/downloads
+  #   restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    # network_mode: "service:gluetun"
+    network_mode: "bridge" # outside of the VPN 
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${SONARR_CONFIG_VOLUME}:/config
+      - ${SONARR_TV_VOLUME}:/grunklestan
+    ports: 
+      - 8989:8989
+    restart: unless-stopped
+  
+  radarr:
+    image: lscr.io/linuxserver/radarr:5.6.0
+    container_name: radarr
+    # network_mode: "service:gluetun"
+    network_mode: "bridge" # outside of the VPN 
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${RADARR_CONFIG_VOLUME}:/config
+      - ${RADARR_MOVIES_VOLUME}:/grunklestan
+    ports: 
+      - 7878:7878
+    restart: unless-stopped
+
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    # network_mode: "service:gluetun"
+    network_mode: "bridge" # outside of the VPN 
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${OVERSEERR_VOLUME}:/config
+    ports: 
+      - 5055:5055
+    restart: unless-stopped
+
+  # plex:
+  #   image: lscr.io/linuxserver/plex:1.40.2
+  #   container_name: plex
+  #   network_mode: "service:gluetun"
+  #   environment:
+  #     - PUID=${PUID}
+  #     - PGID=${PGID}
+  #     - TZ=${TZ}
+  #     - VERSION=${VERSION}
+  #     - PLEX_CLAIM=${PLEX_CLAIM}
+  #   volumes:
+  #     - ${PLEX_VOLUME}:/config
+  #     - ${PLEX_TV_VOLUME}:/data/media
+  #     - ${PLEX_MOVIES_VOLUME}:/data/media
+  #   restart: unless-stopped
+
+  # flaresolverr:
+  #   image: ghcr.io/flaresolverr/flaresolverr:latest
+  #   container_name: flaresolverr
+  #   network_mode: "service:gluetun"
+  #   environment:
+  #     - LOG_LEVEL=${LOG_LEVEL}
+  #     - LOG_HTML=${LOG_HTML}
+  #     - CAPTCHA_SOLVER=${CAPTCHA_SOLVER}
+  #     - TZ=${TZ}
+  #   restart: unless-stopped
+    
+  #Bazarr - for subtitles. Try to use SRT format if you can rather than PGS due to performance issues
+  # bazarr:
+  #   container_name: bazarr
+  #   network_mode: "service:gluetun"
+  #   image: lscr.io/linuxserver/bazarr:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     - PUID=${PUID}
+  #     - PGID=${PGID}
+  #     - TZ=${TZ}
+  #   volumes:
+  #     - ${BAZARR_VOLUME}:/config
+  #     - ${BAZARR_MEDIA}:/data/media
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    # network_mode: "service:gluetun"
+    network_mode: "bridge" # outside of the VPN 
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${PROWLARR_VOLUME}:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
